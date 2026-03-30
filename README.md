@@ -5,7 +5,7 @@ A high-performance, industry-standard ticket booking system built with **Spring 
 ## 🚀 Key Features
 - **Two-Tier Locking**: Prevents double-booking at both the cache (Redis) and database (MySQL) levels.
 - **Real-Time Sync**: Instant UI updates across all connected clients via **WebSockets (STOMP)**.
-- **Auto-Release Logic**: Abandoned seat holds are automatically released after 10 minutes using **RabbitMQ Dead Letter Exchanges**.
+- **Auto-Release Logic**: Abandoned seat holds are automatically released after 2 minutes using **RabbitMQ Dead Letter Exchanges**.
 - **Aesthetic UI**: A premium, dark-mode seat map built with **Framer Motion** and **TailwindCSS**.
 
 ---
@@ -28,8 +28,8 @@ To ensure that NO seat is ever double-booked while maintaining extreme speed, we
 ### 2. The RabbitMQ "Auto-Release" Pattern
 We avoid using traditional "Schedulers" (like `@Scheduled`) because they don't scale well in clustered environments. Instead, we use the **Dead Letter Exchange (DLX)** pattern:
 
-1.  **Wait Queue**: When a seat is locked, a message with a **10-minute TTL** is sent to a "Wait" queue.
-2.  **Expiration**: After 10 minutes, the message expires (dies) and is automatically routed to a **Dead Letter Queue (DLQ)**.
+1.  **Wait Queue**: When a seat is locked, a message with a **2-minute TTL** is sent to a "Wait" queue.
+2.  **Expiration**: After 2 minutes, the message expires (dies) and is automatically routed to a **Dead Letter Queue (DLQ)**.
 3.  **Listener**: Our `SeatExpirationListener` consumes from the DLQ, checks if the seat is still in `LOCKED` status, and if so, reverts it to `AVAILABLE` in both Redis and MySQL.
 
 ### 3. Real-Time WebSockets
