@@ -1,0 +1,152 @@
+:root {
+  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+  --accent: #8b5cf6;
+  --accent-light: rgba(139, 92, 246, 0.2);
+  --glass: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --seat-available: #e2e8f0;
+  --seat-locked: #475569;
+  --seat-booked: #1e293b;
+  --seat-selected: #22c55e;
+}
+
+body {
+  background: var(--bg-gradient);
+  color: #f8fafc;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  min-height: 100vh;
+}
+
+.seat-selection-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.screen-indicator {
+  width: 100%;
+  height: 12px;
+  background: linear-gradient(to bottom, rgba(139, 92, 246, 0.3) 0%, transparent 100%);
+  border-top: 3px solid var(--accent);
+  border-radius: 50% 50% 0 0;
+  margin-top: 40px;
+  position: relative;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 4px;
+  line-height: 48px;
+  opacity: 0.6;
+}
+
+.seat-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 60px;
+}
+
+.seat-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.row-label {
+  font-weight: 700;
+  width: 20px;
+  opacity: 0.5;
+}
+
+.seats {
+  display: flex;
+  gap: 8px;
+}
+
+.seat {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+.seat.available {
+  background: var(--seat-available);
+  color: #0f172a;
+}
+
+.seat.locked {
+  background: var(--seat-locked);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.seat.booked {
+  background: var(--seat-booked);
+  cursor: not-allowed;
+  opacity: 0.2;
+}
+
+.seat.selected {
+  background: var(--seat-selected);
+  color: white;
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
+}
+
+.legend {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+  justify-content: center;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-item .seat {
+  width: 16px;
+  height: 16px;
+}
+
+.status-message {
+  padding: 12px 24px;
+  background: var(--accent-light);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  color: #ddd6fe;
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.confirm-btn {
+  width: 100%;
+  padding: 16px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);
+}
+
+.confirm-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(139, 92, 246, 0.6);
+}
+
+.confirm-btn:active {
+  transform: translateY(0);
+}
