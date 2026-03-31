@@ -25,13 +25,37 @@ To ensure that NO seat is ever double-booked while maintaining extreme speed, we
     *   The database verifies that the version number of the seat hasn't changed since the user first selected it.
     *   If a race condition somehow bypasses Redis, the Database transaction will safely ROLLBACK, ensuring data integrity.
 
-### 2. The RabbitMQ "Auto-Release" Pattern
-We avoid using traditional "Schedulers" (like `@Scheduled`) because they don't scale well in clustered environments. Instead, we use the **Dead Letter Exchange (DLX)** pattern:
+## 🕊️ Distributed Auto-Release Logic (RabbitMQ DLX)
 
-1.  **Wait Queue**: When a seat is locked, a message with a **2-minute TTL** is sent to a "Wait" queue.
-2.  **Expiration**: After 2 minutes, the message expires (dies) and is automatically routed to a **Dead Letter Queue (DLQ)**.
-3.  **Listener**: Our `SeatExpirationListener` consumes from the DLQ, checks if the seat is still in `LOCKED` status, and if so, reverts it to `AVAILABLE` in both Redis and MySQL.
+To avoid using a resource-heavy Java Scheduler (which requires constant database polling), we use the **Dead Letter Exchange (DLX)** pattern. This allows the system to scale to millions of concurrent seat holds with nearly zero CPU overhead.
 
+### **The Mechanism (Step-by-Step)**
+1.  **The "Sleeper" Queue**: When a seat is locked, the backend sends a message (e.g., `{"showId": 101, "seat": "A1"}`) to the `seat_wait_queue`. 
+    *   This queue has **NO consumers**. Messages just sit there.
+    *   Each message is tagged with an **EXPIRATION (TTL)** (e.g., 600,000ms for 10 minutes).
+2.  **Self-Destruction**: RabbitMQ's ultra-fast Erlang engine handles the timer. It doesn't poll; it simply schedules an internal event for that specific message.
+3.  **The Routing (DLX)**: Once the 10 minutes are up, the message "dies." Because the queue is configured with a `dead-letter-exchange`, RabbitMQ automatically re-routes the "dead" message to the `seat_expiration_dlq`.
+4.  **Reaction**: Our `SeatExpirationListener` (Spring Boot) is the ONLY one listening to the `seat_expiration_dlq`. It "wakes up" only when a seat has actually expired.
+5.  **Validation**: The listener checks the database: *"Is Seat A1 still 'LOCKED' by the same user?"* 
+    *   If **YES**: It reverts the status to `AVAILABLE` and clears the Redis lock.
+    *   If **NO** (User booked it already): It ignores the message.
+
+### **A Concrete Example**
+Imagine a high-traffic movie release at **12:00:00 PM**.
+
+*   **12:00:00.000**: User A clicks Seat **C10**.
+    *   Backend sets a **Redis Lock** on `seatlock:101:C10` for 10 minutes.
+    *   Backend sends a message to RabbitMQ with a **600,000ms TTL**.
+*   **12:05:00.000**: User A is entering their credit card details. The server is doing **ZERO** work for this timer. No threads are blocked. No DB is polled.
+*   **12:09:59.999**: User A closes their browser without paying.
+*   **12:10:00.000**: **The "Wake Up" Moment.**
+    *   RabbitMQ detects the message TTL has hit zero.
+    *   It instantly moves the message to the **Dead Letter Queue**.
+*   **12:10:00.020**: Your `SeatExpirationListener` receives the message.
+    *   It checks the DB, sees the seat is still "LOCKED," and **frees it**.
+    *   It broadcasts a WebSocket event so **User B** instantly sees Seat C10 turn **White (Available)** again.
+
+---
 ### 3. Real-Time WebSockets
 We use **STOMP over SockJS** to maintain a persistent tunnel between the server and all users.
 *   Any status change (`LOCKED`, `AVAILABLE`, `BOOKED`) triggers a broadcast to `/topic/shows/{id}/seats`.

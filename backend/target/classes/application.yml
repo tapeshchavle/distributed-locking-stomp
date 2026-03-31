@@ -31,4 +31,4 @@ spring:
 # Custom App configs
 app:
   redis:
-    lock-expiry-minutes: 10
+    lock-expiry-minutes: 2
