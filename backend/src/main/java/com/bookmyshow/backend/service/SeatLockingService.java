@@ -30,7 +30,7 @@ public class SeatLockingService {
     private final RabbitTemplate rabbitTemplate;
     private final ShowSeatRepository showSeatRepository;
 
-    private static final long LOCK_EXPIRY_MINUTES = 10;
+    private static final long LOCK_EXPIRY_MINUTES = 2;
 
     /**
      * Attempts to atomically lock multiple seats in Redis.
