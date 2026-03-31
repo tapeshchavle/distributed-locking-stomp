@@ -1,4 +1,4 @@
-# Scalable Seat Booking System (BookMyShow Clone)
+# Scalable Seat Booking System
 
 A high-performance, industry-standard ticket booking system built with **Spring Boot**, **React**, **Redis**, **MySQL**, and **RabbitMQ**. This project demonstrates how to handle massive concurrency (e.g., thousands of people trying to book the same seat) using a two-tier locking strategy and real-time updates.
 
