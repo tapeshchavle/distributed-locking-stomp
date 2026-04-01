@@ -103,7 +103,6 @@ Navigate to `http://localhost:5173`.
 | | `locked_by_user_id`| BIGINT | ID of the holding user |
 | | **`version`** | **INT** | **Used for Optimistic Locking** |
 
----
 
 ## 🎨 System Design & Aesthetics
 The UI is designed to feel alive and responsive:
