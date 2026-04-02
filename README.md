@@ -110,5 +110,4 @@ The UI is designed to feel alive and responsive:
 - **Live Legend**: Clear indicators for Available, Held, Your Choice, and Sold seats.
 - **Glassmorphism**: A modern, transparent layout using TailwindCSS blur effects.
 
----
 Developed as a demonstration of high-scale transaction management.
