@@ -16,60 +16,52 @@ A high-performance, industry-standard ticket booking system built with **Spring 
 
 ```mermaid
 graph TD
-    %% Styles
-    classDef frontend fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff,rx:5px,ry:5px;
-    classDef backend fill:#276749,stroke:#2f855a,stroke-width:2px,color:#fff,rx:5px,ry:5px;
-    classDef datastore fill:#2b6cb0,stroke:#2c5282,stroke-width:2px,color:#fff,rx:5px,ry:5px;
-    classDef cache fill:#c53030,stroke:#9b2c2c,stroke-width:2px,color:#fff,rx:5px,ry:5px;
-    classDef broker fill:#6b46c1,stroke:#553c9a,stroke-width:2px,color:#fff,rx:5px,ry:5px;
-
     subgraph Client Layer
-        React["React Frontend<br>SeatMap.tsx (UI)"]:::frontend
+        UI[React Frontend UI]
     end
 
-    subgraph Spring Boot Backend Layer
-        REST["BookingController<br>Hold & Confirm API"]:::backend
-        WS["WebSocketConfig<br>STOMP Broker"]:::backend
-        LockSvc["SeatLockingService<br>Redis Operations"]:::backend
-        ConfirmSvc["BookingConfirmationService<br>MySQL Commit"]:::backend
-        Listener["SeatExpirationListener<br>DLQ Consumer"]:::backend
+    subgraph Spring Boot Backend
+        REST[BookingController REST]
+        WS[WebSocket STOMP Broker]
+        LockSvc[SeatLockingService]
+        ConfirmSvc[BookingConfirmationService]
+        Listener[SeatExpirationListener]
         
-        React -->|"1. POST /hold"| REST
-        React -->|"2. POST /confirm"| REST
-        React <-->|"3. WS: /topic/shows/{id}/seats"| WS
+        UI -->|POST hold| REST
+        UI -->|POST confirm| REST
+        UI <-->|WebSocket Sync| WS
 
-        REST -->|"Triggers hold"| LockSvc
-        REST -->|"Triggers commit"| ConfirmSvc
+        REST -->|Trigger Hold| LockSvc
+        REST -->|Trigger Commit| ConfirmSvc
         
-        Listener -->|"Triggers release"| LockSvc
-        ConfirmSvc -.->|"Publish Seat SOLD"| WS
-        LockSvc -.->|"Publish Seat LOCKED / AVAILABLE"| WS
+        Listener -->|Trigger Release| LockSvc
+        ConfirmSvc -.->|Broadcast Event| WS
+        LockSvc -.->|Broadcast Event| WS
     end
 
-    subgraph Caching & Persistence Tier
-        Redis[("Redis<br>Atomic SETNX Key")]:::cache
-        MySQL[("MySQL 8.0<br>show_seats (@Version)")]:::datastore
+    subgraph Persistence Tier
+        Redis[(Redis Atomic Lock)]
+        MySQL[(MySQL 8.0 Db)]
     end
 
-    subgraph Message Broker Tier (RabbitMQ)
-        WaitQ(["seat_wait_queue<br>TTL 10m based Timer"]):::broker
-        DLX{{"seat_expiration_dlx"}}:::broker
-        DLQ(["seat_expiration_dlq<br>Active Queue"]):::broker
+    subgraph RabbitMQ Broker
+        WaitQ([Wait Queue TTL])
+        DLX{{Dead Letter Exchange}}
+        DLQ([Dead Letter Queue])
         
-        WaitQ -- "4. Message TTL Expires" --> DLX
-        DLX -- "5. Re-route Dead Message" --> DLQ
+        WaitQ -- Expired --> DLX
+        DLX -- Route --> DLQ
     end
 
-    %% Data Flow
-    LockSvc -- "Fast Tier-1 Lock" --> Redis
-    LockSvc -- "Schedule Async Timer" --> WaitQ
+    LockSvc -- Tier 1 Lock --> Redis
+    LockSvc -- Schedule Timer --> WaitQ
     
-    DLQ -- "6. Consumes Msg" --> Listener
-    Listener -- "7. Validate & Release Lock" --> Redis
-    Listener -- "8. Revert Status (if not booked)" --> MySQL
+    DLQ -- Consume Msg --> Listener
+    Listener -- Validate and Free --> Redis
+    Listener -- Revert Status --> MySQL
     
-    ConfirmSvc -- "Tier-2 Optimistic Lock Commit" --> MySQL
-    ConfirmSvc -- "Clear Lock if Success" --> Redis
+    ConfirmSvc -- Tier 2 Commit --> MySQL
+    ConfirmSvc -- Clear Lock --> Redis
 ```
 
 ### 1. Two-Tier Locking Strategy
