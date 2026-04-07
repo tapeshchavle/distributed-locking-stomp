@@ -24,44 +24,52 @@ graph TD
     classDef broker fill:#6b46c1,stroke:#553c9a,stroke-width:2px,color:#fff,rx:5px,ry:5px;
 
     subgraph Client Layer
-        UI[React Frontend<br/>TailwindCSS & Framer Motion]:::frontend
+        React["React Frontend<br>SeatMap.tsx (UI)"]:::frontend
     end
 
     subgraph Spring Boot Backend Layer
-        REST[REST Controllers<br/>/api/shows/*]:::backend
-        WS[WebSocket STOMP Broker<br/>/topic/shows/*]:::backend
-        Service[Seat Booking Service<br/>Business Logic]:::backend
-        Listener[Seat Expiration Listener<br/>@RabbitListener]:::backend
+        REST["BookingController<br>Hold & Confirm API"]:::backend
+        WS["WebSocketConfig<br>STOMP Broker"]:::backend
+        LockSvc["SeatLockingService<br>Redis Operations"]:::backend
+        ConfirmSvc["BookingConfirmationService<br>MySQL Commit"]:::backend
+        Listener["SeatExpirationListener<br>DLQ Consumer"]:::backend
         
-        UI -->|1. HTTP POST (Lock/Confirm)| REST
-        UI <-->|2. Real-Time Sync| WS
-        REST --> Service
-        Listener --> Service
-        Service -.->|Broadcasts Updates| WS
+        React -->|"1. POST /hold"| REST
+        React -->|"2. POST /confirm"| REST
+        React <-->|"3. WS: /topic/shows/{id}/seats"| WS
+
+        REST -->|"Triggers hold"| LockSvc
+        REST -->|"Triggers commit"| ConfirmSvc
+        
+        Listener -->|"Triggers release"| LockSvc
+        ConfirmSvc -.->|"Publish Seat SOLD"| WS
+        LockSvc -.->|"Publish Seat LOCKED / AVAILABLE"| WS
     end
 
     subgraph Caching & Persistence Tier
-        Redis[(Redis<br/>Tier-1 Lock)]:::cache
-        MySQL[(MySQL 8.0<br/>Tier-2 Optimistic Lock)]:::datastore
+        Redis[("Redis<br>Atomic SETNX Key")]:::cache
+        MySQL[("MySQL 8.0<br>show_seats (@Version)")]:::datastore
     end
 
     subgraph Message Broker Tier (RabbitMQ)
-        WaitQ([Wait Queue<br/>No Consumers, TTL defined]):::broker
-        DLX{{Dead Letter Exchange}}:::broker
-        DLQ([Dead Letter Queue<br/>seat_expiration_dlq]):::broker
+        WaitQ(["seat_wait_queue<br>TTL 10m based Timer"]):::broker
+        DLX{{"seat_expiration_dlx"}}:::broker
+        DLQ(["seat_expiration_dlq<br>Active Queue"]):::broker
         
-        WaitQ -- "Message Expires (TTL)" --> DLX
-        DLX -- "Routes Dead Message" --> DLQ
+        WaitQ -- "4. Message TTL Expires" --> DLX
+        DLX -- "5. Re-route Dead Message" --> DLQ
     end
 
     %% Data Flow
-    Service -- "3. Atomic SETNX" --> Redis
-    Service -- "4. Publish Lock Msg with 10m TTL" --> WaitQ
-    Service -- "5. Final Payment Commit (@Version)" --> MySQL
+    LockSvc -- "Fast Tier-1 Lock" --> Redis
+    LockSvc -- "Schedule Async Timer" --> WaitQ
     
-    DLQ -- "6. Consumes Expired Message" --> Listener
-    Listener -- "7. Free Lock (if unpaid)" --> Redis
-    Listener -- "8. Revert Status" --> MySQL
+    DLQ -- "6. Consumes Msg" --> Listener
+    Listener -- "7. Validate & Release Lock" --> Redis
+    Listener -- "8. Revert Status (if not booked)" --> MySQL
+    
+    ConfirmSvc -- "Tier-2 Optimistic Lock Commit" --> MySQL
+    ConfirmSvc -- "Clear Lock if Success" --> Redis
 ```
 
 ### 1. Two-Tier Locking Strategy
