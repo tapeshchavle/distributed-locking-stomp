@@ -12,6 +12,58 @@ A high-performance, industry-standard ticket booking system built with **Spring 
 
 ## 🏗️ Technical Architecture
 
+### Complete System Architecture Diagram
+
+```mermaid
+graph TD
+    %% Styles
+    classDef frontend fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff,rx:5px,ry:5px;
+    classDef backend fill:#276749,stroke:#2f855a,stroke-width:2px,color:#fff,rx:5px,ry:5px;
+    classDef datastore fill:#2b6cb0,stroke:#2c5282,stroke-width:2px,color:#fff,rx:5px,ry:5px;
+    classDef cache fill:#c53030,stroke:#9b2c2c,stroke-width:2px,color:#fff,rx:5px,ry:5px;
+    classDef broker fill:#6b46c1,stroke:#553c9a,stroke-width:2px,color:#fff,rx:5px,ry:5px;
+
+    subgraph Client Layer
+        UI[React Frontend<br/>TailwindCSS & Framer Motion]:::frontend
+    end
+
+    subgraph Spring Boot Backend Layer
+        REST[REST Controllers<br/>/api/shows/*]:::backend
+        WS[WebSocket STOMP Broker<br/>/topic/shows/*]:::backend
+        Service[Seat Booking Service<br/>Business Logic]:::backend
+        Listener[Seat Expiration Listener<br/>@RabbitListener]:::backend
+        
+        UI -->|1. HTTP POST (Lock/Confirm)| REST
+        UI <-->|2. Real-Time Sync| WS
+        REST --> Service
+        Listener --> Service
+        Service -.->|Broadcasts Updates| WS
+    end
+
+    subgraph Caching & Persistence Tier
+        Redis[(Redis<br/>Tier-1 Lock)]:::cache
+        MySQL[(MySQL 8.0<br/>Tier-2 Optimistic Lock)]:::datastore
+    end
+
+    subgraph Message Broker Tier (RabbitMQ)
+        WaitQ([Wait Queue<br/>No Consumers, TTL defined]):::broker
+        DLX{{Dead Letter Exchange}}:::broker
+        DLQ([Dead Letter Queue<br/>seat_expiration_dlq]):::broker
+        
+        WaitQ -- "Message Expires (TTL)" --> DLX
+        DLX -- "Routes Dead Message" --> DLQ
+    end
+
+    %% Data Flow
+    Service -- "3. Atomic SETNX" --> Redis
+    Service -- "4. Publish Lock Msg with 10m TTL" --> WaitQ
+    Service -- "5. Final Payment Commit (@Version)" --> MySQL
+    
+    DLQ -- "6. Consumes Expired Message" --> Listener
+    Listener -- "7. Free Lock (if unpaid)" --> Redis
+    Listener -- "8. Revert Status" --> MySQL
+```
+
 ### 1. Two-Tier Locking Strategy
 To ensure that NO seat is ever double-booked while maintaining extreme speed, we use a hybrid approach:
 
